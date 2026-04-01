@@ -1,7 +1,9 @@
+
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -13,12 +15,56 @@ import {
   View,
 } from 'react-native';
 
+// นำเข้า Firebase Auth
+import { getAuth, sendPasswordResetEmail, signOut  } from "firebase/auth";
+
 export default function ResetPasswordScreen() {
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState(''); 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ดึงอีเมลของคนที่ล็อกอินอยู่มาแสดงอัตโนมัติเมื่อเปิดหน้านี้
+  useEffect(() => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (currentUser && currentUser.email) {
+      setEmail(currentUser.email);
+    }
+  }, []);
+
+  // ฟังก์ชันส่งลิงก์เปลี่ยนรหัสผ่าน
+  const handleSendResetLink = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      Alert.alert('แจ้งเตือน', 'ไม่พบข้อมูลอีเมล กรุณาระบุอีเมล');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const auth = getAuth();
+      await sendPasswordResetEmail(auth, trimmedEmail);
+      
+      Alert.alert(
+        'ส่งลิงก์สำเร็จ!', 
+        `ระบบได้ส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปที่\n${trimmedEmail}\nกรุณาไปเปลี่ยนรหัสผ่านในอีเมล แล้วล็อกอินใหม่อีกครั้งนะครับ`,
+        [
+          { 
+            text: 'ไปที่หน้าเข้าสู่ระบบ', 
+            onPress: async () => {
+              // เตะออกจากระบบ แล้วพาไปหน้า Login
+              await signOut(auth);
+              router.replace('/login' as any); 
+            } 
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error("Change Password Error:", error);
+      Alert.alert('ข้อผิดพลาด', 'ไม่สามารถส่งลิงก์ได้ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -45,7 +91,7 @@ export default function ResetPasswordScreen() {
               <Ionicons name="lock-closed" size={48} color="#F28C28" />
             </View>
             <Text style={styles.title}>เปลี่ยนรหัสผ่าน</Text>
-            <Text style={styles.subtitle}>กรุณากรอกข้อมูลเพื่อตั้งรหัสผ่านใหม่ของคุณ</Text>
+            <Text style={styles.subtitle}>ระบบจะส่งลิงก์ไปยังอีเมลของคุณ{'\n'}เพื่อความปลอดภัยในการตั้งรหัสผ่านใหม่</Text>
           </View>
 
           {/* ========================================== */}
@@ -54,65 +100,16 @@ export default function ResetPasswordScreen() {
           <View style={styles.formCard}>
             
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>อีเมล (Email)</Text>
+              <Text style={styles.label}>อีเมลที่ใช้รับลิงก์ (Email)</Text>
               <TextInput 
-                style={styles.input} 
+                style={[styles.input, { backgroundColor: '#F3F4F6', color: '#6B7280' }]} 
                 value={email} 
                 onChangeText={setEmail} 
                 placeholder="ระบุอีเมลของคุณ"
                 placeholderTextColor="#9CA3AF"
                 keyboardType="email-address"
                 autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>เบอร์โทรศัพท์</Text>
-              <TextInput 
-                style={styles.input} 
-                value={phone} 
-                onChangeText={setPhone} 
-                placeholder="ระบุเบอร์โทรศัพท์"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>รหัสผ่านเดิม </Text>
-              <TextInput
-                style={styles.input}
-                secureTextEntry
-                value={oldPassword}
-                onChangeText={setOldPassword}
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>รหัสผ่านใหม่ </Text>
-              <TextInput
-                style={styles.input}
-                secureTextEntry
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>ยืนยันรหัสผ่านใหม่</Text>
-              <TextInput
-                style={styles.input}
-                secureTextEntry
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
+                editable={false} // ล็อกไว้ไม่ให้แก้ ป้องกันการส่งผิดเมล
               />
             </View>
 
@@ -122,11 +119,14 @@ export default function ResetPasswordScreen() {
           {/* Submit Button */}
           {/* ========================================== */}
           <TouchableOpacity 
-            style={styles.primaryButton} 
+            style={[styles.primaryButton, isSubmitting && { backgroundColor: '#FDBA74' }]} 
             activeOpacity={0.8}
-            onPress={() => router.back()}
+            onPress={handleSendResetLink}
+            disabled={isSubmitting}
           >
-            <Text style={styles.primaryButtonText}>บันทึกรหัสผ่านใหม่</Text>
+            <Text style={styles.primaryButtonText}>
+              {isSubmitting ? 'กำลังส่งข้อมูล...' : 'ส่งลิงก์เปลี่ยนรหัสผ่าน'}
+            </Text>
           </TouchableOpacity>
 
         </ScrollView>
@@ -141,7 +141,7 @@ export default function ResetPasswordScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F9FAFB', // สีพื้นหลังแอป
+    backgroundColor: '#F9FAFB', 
   },
   headerBar: {
     flexDirection: 'row',
@@ -189,6 +189,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+    lineHeight: 22,
   },
   formCard: {
     backgroundColor: '#FFFFFF',
@@ -203,7 +204,7 @@ const styles = StyleSheet.create({
     borderColor: '#F3F4F6',
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 10,
   },
   label: {
     fontSize: 14,
@@ -223,12 +224,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 10,
-    marginBottom: 24,
-  },
   primaryButton: {
     marginTop: 30,
     backgroundColor: '#F28C28',
@@ -244,7 +239,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
   },
 });

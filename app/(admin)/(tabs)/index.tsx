@@ -12,15 +12,17 @@ import {
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert // ✅ เพิ่ม Alert
 } from 'react-native';
 
-// ✅ 1. นำเข้า Firebase และ getAuth เพิ่มเติม
 import { getAuth } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+// ✅ นำเข้า updateDoc เพิ่มเติม
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../constants/firebaseConfig'; 
 
-const STATUS_TABS = ['ทั้งหมด', 'รอดำเนินการ', 'กำลังซ่อม', 'เสร็จสิ้น'];
+// ✅ 1. เพิ่มแท็บ "รอตรวจสอบ" เข้ามาในระบบ
+const STATUS_TABS = ['ทั้งหมด', 'รอดำเนินการ', 'กำลังซ่อม', 'รอตรวจสอบ', 'เสร็จสิ้น'];
 const DATE_OPTIONS = ['ทั้งหมด', 'วันนี้', 'เมื่อวาน'];
 const CATEGORY_OPTIONS = ['ทั้งหมด', 'ประปา', 'ไฟฟ้า', 'เฟอร์นิเจอร์', 'เครื่องใช้ไฟฟ้า', 'อื่นๆ'];
 const FEMALE_DORMS = ['สุรนิเวศ 1', 'สุรนิเวศ 2', 'สุรนิเวศ 3', 'สุรนิเวศ 4', 'สุรนิเวศ 5', 'สุรนิเวศ 14', 'สุรนิเวศ 15'];
@@ -31,14 +33,12 @@ export default function AdminDashboardScreen() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filter States
   const [selectedDate, setSelectedDate] = useState('ทั้งหมด');
   const [selectedDorm, setSelectedDorm] = useState('ทั้งหมด');
   const [selectedCategory, setSelectedCategory] = useState('ทั้งหมด');
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [filterType, setFilterType] = useState<'date' | 'dorm' | 'category'>('date');
 
-  // Detail Pop-up States
   const [openDetail, setOpenDetail] = useState(false);
   const [selectedRepair, setSelectedRepair] = useState<any>(null);
   const [reporterInfo, setReporterInfo] = useState<any>(null); 
@@ -46,7 +46,6 @@ export default function AdminDashboardScreen() {
   const [imageViewer, setImageViewer] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // ✅ เพิ่ม State สำหรับแจ้งเตือนและข้อมูลแอดมิน
   const [unreadCount, setUnreadCount] = useState(0);
   const [userData, setUserData] = useState<any>(null);
 
@@ -59,7 +58,6 @@ export default function AdminDashboardScreen() {
     let unsubUser = () => {};
     let unsubNotif = () => {};
 
-    // 1. ดึงข้อมูลงานทั้งหมด
     const qReports = query(collection(db, "Reports"));
     unsubReports = onSnapshot(qReports, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -75,12 +73,10 @@ export default function AdminDashboardScreen() {
       setLoading(false);
     });
 
-    // 2. ดึงสถานะการตั้งค่าของ Admin
     unsubUser = onSnapshot(doc(db, "Users", user.uid), (docSnap) => {
       if (docSnap.exists()) setUserData(docSnap.data());
     });
 
-    // 3. ดึงจำนวนแจ้งเตือนที่ยังไม่ได้อ่าน
     const qNotif = query(
       collection(db, "Notifications"),
       where("targetUid", "==", user.uid),
@@ -94,12 +90,22 @@ export default function AdminDashboardScreen() {
   }, []);
 
   const handleOpenDetail = async (task: any) => {
-    setSelectedRepair(task);
     setOpenDetail(true);
-    setReporterInfo(null); 
+    setReporterInfo(null);
+    
+    try {
+      const reportRef = doc(db, "Reports", task.id);
+      const reportSnap = await getDoc(reportRef);
+      if (reportSnap.exists()) {
+        setSelectedRepair({ id: reportSnap.id, ...reportSnap.data() });
+      } else {
+        setSelectedRepair(task); 
+      }
+    } catch (error) {
+      setSelectedRepair(task);
+    }
 
     const uid = task.userId || task.uid;
-
     if (uid) {
       try {
         const userRef = doc(db, "Users", uid);
@@ -107,21 +113,37 @@ export default function AdminDashboardScreen() {
         if (userSnap.exists()) {
           setReporterInfo(userSnap.data());
         } else {
-          setReporterInfo({ 
-            fullName: task.fullName || task.name || "ไม่ระบุชื่อ", 
-            studentId: task.studentId || "-" 
-          });
+          setReporterInfo({ fullName: task.fullName || task.name || "ไม่ระบุชื่อ", studentId: task.studentId || "-" });
         }
       } catch (error) {
-        console.error("Error fetching user:", error);
         setReporterInfo({ fullName: "เกิดข้อผิดพลาดในการโหลด" });
       }
     } else {
-      setReporterInfo({ 
-        fullName: task.fullName || task.name || "ไม่ระบุชื่อ",
-        studentId: task.studentId || "-"
-      });
+      setReporterInfo({ fullName: task.fullName || task.name || "ไม่ระบุชื่อ", studentId: task.studentId || "-" });
     }
+  };
+
+  // ✅ 2. ฟังก์ชันแอดมินกดอนุมัติงาน
+  const handleApproveJob = async (jobId: string) => {
+    Alert.alert("ยืนยันการอนุมัติ", "ตรวจสอบงานเรียบร้อยและต้องการปิดงานนี้ใช่หรือไม่?", [
+      { text: "ยกเลิก", style: "cancel" },
+      { 
+        text: "อนุมัติจบงาน", 
+        onPress: async () => {
+          try {
+            const docRef = doc(db, "Reports", jobId);
+            await updateDoc(docRef, {
+              status: "เสร็จสิ้น", // อัปเดตให้เป็นเสร็จสิ้น User จะได้เห็นว่าเสร็จแล้ว
+              approvedAt: new Date().toISOString()
+            });
+            Alert.alert("สำเร็จ", "อนุมัติงานเสร็จสิ้นเรียบร้อยแล้ว");
+            setOpenDetail(false); // ปิด Pop-up
+          } catch (error) {
+            Alert.alert("ผิดพลาด", "ไม่สามารถอนุมัติงานได้");
+          }
+        }
+      }
+    ]);
   };
 
   const getCategoryConfig = (category: string) => {
@@ -145,6 +167,7 @@ export default function AdminDashboardScreen() {
     let matchStatus = activeTab === 'ทั้งหมด';
     if (activeTab === 'รอดำเนินการ') matchStatus = task.status === 'รอดำเนินการ';
     if (activeTab === 'กำลังซ่อม') matchStatus = (task.status === 'กำลังดำเนินการ' || task.status === 'กำลังซ่อม');
+    if (activeTab === 'รอตรวจสอบ') matchStatus = task.status === 'รอตรวจสอบ'; // ✅ เช็คเงื่อนไขแท็บ รอตรวจสอบ
     if (activeTab === 'เสร็จสิ้น') matchStatus = (task.status === 'เสร็จสิ้น' || task.status === 'เสร็จสมบูรณ์');
 
     const matchCat = selectedCategory === 'ทั้งหมด' || task.category === selectedCategory;
@@ -163,7 +186,6 @@ export default function AdminDashboardScreen() {
           </View>
         </View>
 
-        {/* ✅ ปรับปรุงกระดิ่งให้มีตัวเลขแจ้งเตือน */}
         <TouchableOpacity style={styles.notificationBtn} onPress={() => router.push('/(admin)/notifications' as any)}>
           <Ionicons name="notifications-outline" size={26} color="#111" />
           {userData?.pushEnabled !== false && unreadCount > 0 && (
@@ -201,7 +223,13 @@ export default function AdminDashboardScreen() {
         <View style={styles.listContainer}>
           {loading ? <ActivityIndicator size="large" color="#F28C28" style={{marginTop: 50}} /> : filteredTasks.map((task) => {
             const config = getCategoryConfig(task.category);
-            const statusColor = (task.status === 'เสร็จสิ้น' || task.status === 'เสร็จสมบูรณ์') ? '#10B981' : (task.status === 'กำลังดำเนินการ' || task.status === 'กำลังซ่อม' ? '#3B82F6' : '#F59E0B');
+            
+            // ✅ เปลี่ยนสีสถานะให้เหมาะกับ 'รอตรวจสอบ'
+            let statusColor = '#F59E0B'; // สีส้ม (รอดำเนินการ)
+            if (task.status === 'กำลังดำเนินการ' || task.status === 'กำลังซ่อม') statusColor = '#3B82F6'; // สีฟ้า
+            if (task.status === 'รอตรวจสอบ') statusColor = '#8B5CF6'; // สีม่วง
+            if (task.status === 'เสร็จสิ้น' || task.status === 'เสร็จสมบูรณ์') statusColor = '#10B981'; // สีเขียว
+
             return (
               <TouchableOpacity key={task.id} style={styles.ticketCard} onPress={() => handleOpenDetail(task)}>
                 <View style={[styles.urgencyIndicator, { backgroundColor: config.color }]} />
@@ -230,7 +258,7 @@ export default function AdminDashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* ✅ Modal แสดงผลชื่อและรหัสนักศึกษาตาม Database */}
+      {/* Modal แสดงรายละเอียด */}
       <Modal visible={openDetail} animationType="slide" transparent={true}>
         <View style={styles.modalBg}>
           <View style={styles.detailBox}>
@@ -247,7 +275,14 @@ export default function AdminDashboardScreen() {
                     <Ionicons name={getCategoryConfig(selectedRepair.category).icon as any} size={16} color={getCategoryConfig(selectedRepair.category).color} />
                     <Text style={[styles.badgeText, { color: getCategoryConfig(selectedRepair.category).color }]}>{selectedRepair.category}</Text>
                   </View>
-                  <Text style={{fontWeight:'800', color: (selectedRepair.status === 'เสร็จสิ้น' || selectedRepair.status === 'เสร็จสมบูรณ์') ? '#10B981' : '#F59E0B'}}>
+                  
+                  {/* เปลี่ยนสีสถานะใน Modal */}
+                  <Text style={{
+                    fontWeight:'800', 
+                    color: (selectedRepair.status === 'เสร็จสิ้น' || selectedRepair.status === 'เสร็จสมบูรณ์') ? '#10B981' : 
+                           selectedRepair.status === 'รอตรวจสอบ' ? '#8B5CF6' :
+                           selectedRepair.status === 'กำลังดำเนินการ' ? '#3B82F6' : '#F59E0B'
+                  }}>
                     {selectedRepair.status === 'กำลังดำเนินการ' ? 'กำลังซ่อม' : selectedRepair.status}
                   </Text>
                 </View>
@@ -261,7 +296,6 @@ export default function AdminDashboardScreen() {
                   </View>
                   <View style={styles.detailInfoDivider} />
                   
-                  {/* ✅ แสดงชื่อผู้แจ้งจริงจาก Database */}
                   <View style={styles.detailInfoRow}>
                     <Ionicons name="person-outline" size={20} color="#6B7280" />
                     <View style={styles.detailInfoTextGroup}>
@@ -273,7 +307,6 @@ export default function AdminDashboardScreen() {
                   </View>
                   <View style={styles.detailInfoDivider} />
 
-                  {/* ✅ แสดงรหัสนักศึกษาจริงจาก Database */}
                   <View style={styles.detailInfoRow}>
                     <Ionicons name="card-outline" size={20} color="#6B7280" />
                     <View style={styles.detailInfoTextGroup}>
@@ -294,25 +327,41 @@ export default function AdminDashboardScreen() {
                   </View>
                 </View>
                 
-                {selectedRepair.images?.length > 0 && (
+                {((selectedRepair.images && selectedRepair.images.length > 0) || selectedRepair.image) && (
                   <View style={{marginTop: 20}}>
                     <Text style={styles.detailSectionTitle}>รูปภาพประกอบ</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 10}}>
-                      {selectedRepair.images.map((img: string, i: number) => (
+                      {selectedRepair.images && selectedRepair.images.length > 0 && selectedRepair.images.map((img: string, i: number) => (
                         <TouchableOpacity key={i} onPress={() => { setSelectedImage(img); setImageViewer(true); }}>
                           <Image source={{ uri: img }} style={styles.galleryImage} />
                         </TouchableOpacity>
                       ))}
+                      {selectedRepair.image && (!selectedRepair.images || selectedRepair.images.length === 0) && (
+                        <TouchableOpacity onPress={() => { setSelectedImage(selectedRepair.image); setImageViewer(true); }}>
+                          <Image source={{ uri: selectedRepair.image }} style={styles.galleryImage} />
+                        </TouchableOpacity>
+                      )}
                     </ScrollView>
                   </View>
                 )}
+
+                {/* ✅ 3. โชว์ปุ่ม "อนุมัติจบงาน" เฉพาะเมื่อสถานะคือ "รอตรวจสอบ" */}
+                {selectedRepair.status === 'รอตรวจสอบ' && (
+                  <TouchableOpacity 
+                    style={styles.approveButton}
+                    onPress={() => handleApproveJob(selectedRepair.id)}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+                    <Text style={styles.approveButtonText}>อนุมัติจบงาน (เสร็จสิ้น)</Text>
+                  </TouchableOpacity>
+                )}
+
               </ScrollView>
             )}
           </View>
         </View>
       </Modal>
 
-      {/* Filter Modal & Image Viewer คงเดิม */}
       <Modal visible={filterModalVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlayFilter} activeOpacity={1} onPress={() => setFilterModalVisible(false)}>
           <View style={styles.modalContentFilter}>
@@ -345,12 +394,9 @@ const styles = StyleSheet.create({
   logoImage: { width: 44, height: 44, borderRadius: 10, marginRight: 12 },
   appName: { fontSize: 18, fontWeight: '800', color: '#111827' },
   appSubtitle: { fontSize: 11, fontWeight: '600', color: '#EF4444', marginTop: 2 },
-  
-  // ✅ อัปเดตสไตล์กระดิ่งแอดมิน
   notificationBtn: { padding: 8, position: 'relative' },
   notificationBadge: { position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, backgroundColor: '#EF4444', borderRadius: 9, borderWidth: 1.5, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
   badgeText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
-
   scrollContent: { paddingBottom: 40 },
   pageHeader: { padding: 20 },
   pageTitle: { fontSize: 22, fontWeight: '800', color: '#111827' },
@@ -392,6 +438,11 @@ const styles = StyleSheet.create({
   detailInfoValue: { fontSize: 14, fontWeight: '700', color: '#111827' },
   detailInfoDivider: { height: 1, backgroundColor: '#E5E7EB', marginVertical: 12 },
   galleryImage: { width: 120, height: 120, borderRadius: 12 },
+  
+  // ✅ สไตล์สำหรับปุ่มอนุมัติจบงาน
+  approveButton: { backgroundColor: '#10B981', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16, borderRadius: 14, marginTop: 24, marginBottom: 10, gap: 8, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  approveButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+
   modalOverlayFilter: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalContentFilter: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '60%' },
   modalItemFilter: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },

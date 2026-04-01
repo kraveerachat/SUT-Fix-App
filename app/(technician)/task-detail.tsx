@@ -81,7 +81,7 @@ export default function TaskDetailScreen() {
             // 1. อัปเดตสถานะงานเป็นเสร็จสมบูรณ์
             const docRef = doc(db, "Reports", id as string);
             await updateDoc(docRef, {
-                status: "เสร็จสมบูรณ์",
+                status: "รอตรวจสอบ",
                 closingDetail: workDetails,
                 materialCost: materialCost,
                 afterImages: afterImages,

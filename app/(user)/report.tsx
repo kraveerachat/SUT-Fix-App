@@ -7,7 +7,6 @@ import {
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator,
 } from 'react-native';
 
-// ✅ 1. นำเข้า Firebase และเพิ่มฟังก์ชัน Query เพื่อดึงแอดมิน/ช่าง
 import { getAuth } from "firebase/auth";
 import { collection, addDoc, doc, getDoc, updateDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import { db } from '../../constants/firebaseConfig'; 
@@ -38,7 +37,7 @@ function DropdownPicker({ placeholder, options, selectedValue, onSelect }: any) 
                 <Text style={[styles.modalItemText, selectedValue === item && { color: '#F28C28', fontWeight: '700' }]}>{item}</Text>
                 {selectedValue === item && <Ionicons name="checkmark-circle" size={20} color="#F28C28" />}
               </TouchableOpacity>
-            )}/>
+            )} />
           </View>
         </TouchableOpacity>
       </Modal>
@@ -87,6 +86,7 @@ export default function ReportScreen() {
     })();
   }, []);
 
+  // ✅ แก้ไขฟังก์ชันเลือกรูปภาพให้แปลงเป็น Base64
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -97,11 +97,14 @@ export default function ReportScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.8,
+      quality: 0.3, // ลดขนาดรูปภาพลงเพื่อไม่ให้เกินขีดจำกัดของ Firestore
+      base64: true, // สั่งให้แปลงเป็นข้อความ Base64
     });
 
-    if (!result.canceled && result.assets?.length > 0) {
-      setImages((prev) => [...prev, result.assets[0].uri]);
+    if (!result.canceled && result.assets?.length > 0 && result.assets[0].base64) {
+      // เอาข้อความ Base64 มาจัดรูปแบบให้เป็น URL รูปภาพ
+      const base64ImageUri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setImages((prev) => [...prev, base64ImageUri]);
     }
   };
 
@@ -122,7 +125,7 @@ export default function ReportScreen() {
 
       const shortTitle = detail.substring(0, 25) + (detail.length > 25 ? "..." : "");
 
-      // 1. บันทึกข้อมูลลงตาราง Reports
+      // 1. บันทึกข้อมูลลงตาราง Reports (คราวนี้ images จะเก็บเป็น Base64 ใช้งานได้ทุกเครื่อง)
       const docRef = await addDoc(collection(db, "Reports"), {
         userId: auth.currentUser.uid,
         title: shortTitle,
@@ -146,20 +149,19 @@ export default function ReportScreen() {
         room: selectedRoom
       });
 
-      // ✅ 3. ระบบยิงแจ้งเตือนหา "Admin" และ "ช่างเทคนิค" ทุกคนในระบบ
+      // 3. ระบบยิงแจ้งเตือนหา "Admin" และ "ช่างเทคนิค" ทุกคนในระบบ
       const staffQuery = query(collection(db, "Users"), where("role", "in", ["admin", "technician"]));
       const staffSnapshot = await getDocs(staffQuery);
 
       staffSnapshot.forEach(async (staffDoc) => {
-        // ยิงแจ้งเตือนไปให้แต่ละคน
         await addDoc(collection(db, "Notifications"), {
-            targetUid: staffDoc.id, // ส่งหา staff คนนั้น
+            targetUid: staffDoc.id, 
             title: "มีคำร้องแจ้งซ่อมใหม่ 📢",
             body: `นักศึกษาแจ้งปัญหา "${shortTitle}" ที่หอพัก ${selectedDorm} ห้อง ${selectedRoom}`,
             isRead: false,
             type: "new_request",
             category: activeCategory,
-            jobId: docRef.id, // แนบ ID ของ Report เข้าไปด้วย เพื่อกดดูรายละเอียดได้
+            jobId: docRef.id,
             createdAt: serverTimestamp()
         });
       });

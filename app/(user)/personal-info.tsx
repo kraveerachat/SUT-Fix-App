@@ -13,9 +13,10 @@ import {
     View,
     ActivityIndicator,
     Alert,
+    Image,
 } from 'react-native';
 
-// 1. เปลี่ยนจาก updateDoc เป็น setDoc
+import * as ImagePicker from 'expo-image-picker';
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from '../../constants/firebaseConfig'; 
@@ -23,19 +24,17 @@ import { db } from '../../constants/firebaseConfig';
 export default function PersonalInfoScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  
-  // เพิ่ม State ตัวใหม่ ควบคุมเฉพาะปุ่มตอนกดบันทึก
   const [isSaving, setIsSaving] = useState(false);
 
-  // ข้อมูลนักศึกษา
   const [studentId, setStudentId] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [dorm, setDorm] = useState('');
   const [room, setRoom] = useState('');
+  
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
-  // ดึงข้อมูลจาก Firebase
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -54,8 +53,8 @@ export default function PersonalInfoScreen() {
             setPhone(data.phone || '');
             setDorm(data.dorm || '');
             setRoom(data.room || '');
+            setProfileImage(data.profileImage || null); 
           } else {
-             // กรณีล็อคอินด้วยบัญชีที่สร้างจากเว็บ โดยที่ยังไม่มีข้อมูลใน Firestore
              setEmail(currentUser.email || '');
           }
         }
@@ -69,24 +68,47 @@ export default function PersonalInfoScreen() {
     fetchUserData();
   }, []);
 
-  // ฟังก์ชันบันทึกข้อมูลที่ปรับปรุงใหม่ให้เสถียรขึ้น
+  // ✅ แก้ไข: แปลงรูปเป็น Base64 ก่อนเซฟ
+  const pickImage = async () => {
+    if (!isEditing) return; 
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('แจ้งเตือน', 'แอปจำเป็นต้องเข้าถึงคลังรูปภาพเพื่อเปลี่ยนรูปโปรไฟล์');
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.3, // ลด Quality ลงหน่อยเพื่อให้ String ไม่ยาวเกินไป
+      base64: true, // ✅ สั่งให้อ่านไฟล์ภาพออกมาเป็นข้อความ Base64
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      // เอาข้อความ Base64 มาต่อหัวให้กลายเป็น URL ที่ใช้แสดงผลได้
+      const imageBase64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setProfileImage(imageBase64Uri);
+    }
+  };
+
   const handleSaveProfile = async () => {
     try {
-      setIsSaving(true); // สั่งให้ปุ่มโหลด แทนที่จะเปลี่ยนทั้งหน้าจอ
+      setIsSaving(true); 
       const auth = getAuth();
       const currentUser = auth.currentUser;
 
       if (currentUser) {
         const docRef = doc(db, "Users", currentUser.uid);
         
-        // ใช้ setDoc + merge: true ปลอดภัยที่สุด ลดการแครช 100%
         await setDoc(docRef, {
           fullName: (fullName || '').trim(),
           phone: (phone || '').trim(),
           dorm: (dorm || '').trim(),
           room: (room || '').trim(),
-          // เผื่อคนไม่มีข้อมูลระบบจะได้บันทึกอีเมลติดไปด้วย
-          email: currentUser.email, 
+          email: currentUser.email,
+          profileImage: profileImage, // ✅ ตอนนี้จะเป็น Base64 String ที่พร้อมโหลดทุกหน้า
         }, { merge: true });
         
         Alert.alert("สำเร็จ", "อัปเดตข้อมูลส่วนตัวเรียบร้อยแล้ว");
@@ -96,21 +118,15 @@ export default function PersonalInfoScreen() {
       console.error("เกิดข้อผิดพลาดในการบันทึก:", error);
       Alert.alert("ข้อผิดพลาด", "ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่");
     } finally {
-      setIsSaving(false); // ปิดสถานะกำลังโหลด
+      setIsSaving(false); 
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.headerBar}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-            activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={28} color="#F28C28" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>ข้อมูลส่วนตัว</Text>
@@ -132,17 +148,21 @@ export default function PersonalInfoScreen() {
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             
             <View style={styles.avatarSection}>
-              <View style={styles.avatarWrapper}>
+              <TouchableOpacity style={styles.avatarWrapper} activeOpacity={isEditing ? 0.7 : 1} onPress={pickImage}>
                 <View style={styles.avatarCircle}>
-                  <Ionicons name="person" size={50} color="#F28C28" />
+                  {profileImage ? (
+                    <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+                  ) : (
+                    <Ionicons name="person" size={50} color="#F28C28" />
+                  )}
                 </View>
                 {isEditing && (
-                  <TouchableOpacity style={styles.editAvatarBtn} activeOpacity={0.8}>
+                  <View style={styles.editAvatarBtn}>
                     <Ionicons name="camera" size={16} color="#FFFFFF" />
-                  </TouchableOpacity>
+                  </View>
                 )}
-              </View>
-              {isEditing && <Text style={styles.changePhotoText}>เปลี่ยนรูปโปรไฟล์</Text>}
+              </TouchableOpacity>
+              {isEditing && <Text style={styles.changePhotoText}>แตะเพื่อเปลี่ยนรูปโปรไฟล์</Text>}
             </View>
 
             <View style={styles.formCard}>
@@ -240,11 +260,7 @@ export default function PersonalInfoScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity 
-                style={styles.primaryButton} 
-                activeOpacity={0.8}
-                onPress={() => setIsEditing(true)}
-              >
+              <TouchableOpacity style={styles.primaryButton} activeOpacity={0.8} onPress={() => setIsEditing(true)}>
                 <Text style={styles.primaryButtonText}>แก้ไขข้อมูลส่วนตัว</Text>
               </TouchableOpacity>
             )}
@@ -256,9 +272,6 @@ export default function PersonalInfoScreen() {
   );
 }
 
-// ==========================================
-// Styles
-// ==========================================
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F9FAFB' },
   headerBar: {
@@ -277,8 +290,9 @@ const styles = StyleSheet.create({
     width: 100, height: 100, borderRadius: 50, backgroundColor: '#FFF3E8',
     justifyContent: 'center', alignItems: 'center', borderWidth: 3,
     borderColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1, shadowRadius: 6, elevation: 4,
+    shadowOpacity: 0.1, shadowRadius: 6, elevation: 4, overflow: 'hidden' 
   },
+  avatarImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   editAvatarBtn: {
     position: 'absolute', bottom: 0, right: 0, width: 32, height: 32,
     borderRadius: 16, backgroundColor: '#F28C28', justifyContent: 'center',

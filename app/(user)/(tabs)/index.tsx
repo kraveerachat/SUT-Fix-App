@@ -197,7 +197,17 @@ export default function HomeScreen() {
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 <TouchableOpacity style={styles.welcomeCard} activeOpacity={0.8} onPress={() => router.push('/profile')}>
-                    <View style={styles.avatarCircle}><Ionicons name="person" size={32} color="#F28C28" /></View>
+                    {/* เปลี่ยนจากของเดิมที่เป็นแค่ <Ionicons name="person" ... /> ให้เป็นแบบนี้ */}
+<View style={styles.avatarCircle}>
+  {userData?.profileImage ? (
+    <Image 
+      source={{ uri: userData.profileImage }} 
+      style={{ width: '100%', height: '100%', borderRadius: 50, resizeMode: 'cover' }} 
+    />
+  ) : (
+    <Ionicons name="person" size={40} color="#F28C28" />
+  )}
+</View>
                     <View style={styles.welcomeTextContainer}>
                         <Text style={styles.welcomeTitle}>Hi, {userData?.fullName || userData?.studentId || 'นักศึกษา'}</Text>
                         <View style={styles.locationBadge}>

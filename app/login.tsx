@@ -147,7 +147,9 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ========================================== */}
           {/* Header Section */}
+          {/* ========================================== */}
           <View style={styles.headerSection}>
             <View style={styles.logoContainer}>
               <Image 
@@ -163,16 +165,9 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* Test Mode Banner */}
-          <View style={styles.infoBanner}>
-            <Ionicons name="information-circle" size={22} color="#3B82F6" style={styles.infoIcon} />
-            <Text style={styles.infoText}>
-              <Text style={{ fontWeight: '800' }}>โหมดทดสอบ: </Text> 
-              กรอก Email และ Password ที่ลงทะเบียนไว้ในระบบ Firebase
-            </Text>
-          </View>
-
+          {/* ========================================== */}
           {/* Form Container */}
+          {/* ========================================== */}
           <View style={styles.formContainer}>
             {/* Username Input */}
             <View style={styles.inputGroup}>
@@ -183,7 +178,7 @@ export default function LoginScreen() {
                   style={styles.input} 
                   value={username} 
                   onChangeText={setUsername} 
-                  placeholder="กรอกอีเมลผู้ใช้งาน"
+                  placeholder="กรอกอีเมล หรือ รหัสนักศึกษา"
                   placeholderTextColor="#9CA3AF"
                   autoCapitalize="none"
                   keyboardType="email-address"
@@ -208,9 +203,13 @@ export default function LoginScreen() {
             </View>
 
             {/* Forgot Password Link */}
-            <TouchableOpacity style={styles.forgotPasswordBtn} activeOpacity={0.7}>
-              <Text style={styles.forgotPasswordText}>ลืมรหัสผ่าน?</Text>
-            </TouchableOpacity>
+<TouchableOpacity 
+  style={styles.forgotPasswordBtn} 
+  activeOpacity={0.7}
+  onPress={() => router.push('/forgot-password')} // <--- เพิ่มบรรทัดนี้
+>
+  <Text style={styles.forgotPasswordText}>ลืมรหัสผ่าน?</Text>
+</TouchableOpacity>
 
             {/* Login Button */}
             <TouchableOpacity style={styles.loginBtn} activeOpacity={0.8} onPress={handleLogin}>
@@ -239,15 +238,18 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   keyboardAvoid: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 40, justifyContent: 'center' },
-  headerSection: { alignItems: 'center', marginTop: Platform.OS === 'ios' ? 60 : 40, marginBottom: 24, paddingHorizontal: 20 },
+  
+  // ปรับ marginBottom จาก 24 เป็น 40 เพื่อชดเชยพื้นที่กล่องสีฟ้าที่หายไป ให้ Layout ดูโปร่งและสมดุลขึ้น
+  headerSection: { alignItems: 'center', marginTop: Platform.OS === 'ios' ? 60 : 40, marginBottom: 40, paddingHorizontal: 20 },
+  
   logoContainer: { width: 110, height: 110, marginBottom: 16, justifyContent: 'center', alignItems: 'center' },
   logoImage: { width: '100%', height: '100%' },
   welcomeText: { fontSize: 16, fontWeight: '700', color: '#4B5563', marginBottom: 2 },
   appNameText: { fontSize: 34, fontWeight: '900', color: '#F28C28', marginBottom: 12 },
   subtitleText: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 20 },
-  infoBanner: { flexDirection: 'row', backgroundColor: '#EFF6FF', marginHorizontal: 24, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#BFDBFE', marginBottom: 32, alignItems: 'flex-start' },
-  infoIcon: { marginRight: 10, marginTop: 2 },
-  infoText: { flex: 1, fontSize: 13, color: '#1E3A8A', lineHeight: 20 },
+  
+  // ส่วนของกล่องโหมดทดสอบถูกลบออกไปแล้ว
+  
   formContainer: { paddingHorizontal: 24 },
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: '700', color: '#374151', marginBottom: 8, marginLeft: 4 },
