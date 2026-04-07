@@ -45,6 +45,23 @@ export default function TechJobDetail() {
     }
   };
 
+  // ➕ เพิ่มฟังก์ชันถ่ายรูปจากกล้อง
+  const takeFinishPhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("แจ้งเตือน", "กรุณาอนุญาตการเข้าถึงกล้อง");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.5,
+    });
+
+    if (!result.canceled && result.assets?.length > 0) {
+      setFinishImage(result.assets[0].uri);
+    }
+  };
+
   // ✅ ฟังก์ชันปิดงาน/ส่งงาน (อัปโหลดรูปไป tech_finishes)
   const handleCloseJob = async () => {
     if (!finishDetail || !finishImage) {
@@ -92,7 +109,7 @@ export default function TechJobDetail() {
       });
 
       Alert.alert("สำเร็จ", "ปิดงานแจ้งซ่อมเรียบร้อยแล้ว", [
-        { text: "ตกลon", onPress: () => router.back() }
+        { text: "ตกลง", onPress: () => router.back() }
       ]);
     } catch (error) {
       console.error(error);
@@ -150,10 +167,17 @@ export default function TechJobDetail() {
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={styles.uploadBtn} onPress={pickFinishImage}>
-              <Ionicons name="camera" size={40} color="#F28C28" />
-              <Text style={styles.uploadBtnText}>คลิกเพื่อถ่ายรูป/เลือกรูปหลังซ่อม</Text>
-            </TouchableOpacity>
+            // 🛠️ แยก 2 ปุ่มให้ชัดเจน
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity style={[styles.uploadBtn, { flex: 1, padding: 20 }]} onPress={pickFinishImage}>
+                <Ionicons name="image" size={40} color="#F28C28" />
+                <Text style={[styles.uploadBtnText, { textAlign: 'center' }]}>เลือกจากคลัง</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.uploadBtn, { flex: 1, padding: 20 }]} onPress={takeFinishPhoto}>
+                <Ionicons name="camera" size={40} color="#F28C28" />
+                <Text style={[styles.uploadBtnText, { textAlign: 'center' }]}>ถ่ายรูปใหม่</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           <TouchableOpacity 

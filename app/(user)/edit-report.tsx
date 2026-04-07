@@ -47,6 +47,20 @@ export default function EditReportScreen() {
     if (!result.canceled) setImages((prev) => [...prev, result.assets[0].uri]);
   };
 
+  // ➕ เพิ่มฟังก์ชันถ่ายรูปจากกล้อง
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("แจ้งเตือน", "กรุณาอนุญาตการเข้าถึงกล้อง");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.5,
+    });
+    if (!result.canceled) setImages((prev) => [...prev, result.assets[0].uri]);
+  };
+
   const removeImage = (index: number) => setImages((prev) => prev.filter((_, i) => i !== index));
 
   const handleUpdate = async () => {
@@ -59,7 +73,6 @@ export default function EditReportScreen() {
       setIsUpdating(true);
       const docRef = doc(db, "Reports", id as string);
       
-      // ✅ 1. ลบรูปออกจาก Storage จริงๆ (รูปที่เคยมีแต่โดนกดกากบาทออก)
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const oldImages: string[] = docSnap.data().images || [];
@@ -72,7 +85,6 @@ export default function EditReportScreen() {
         }
       }
 
-      // ✅ 2. จัดการรูปภาพ (เก็บรูปเดิม + อัปโหลดรูปใหม่)
       const finalImageUrls: string[] = [];
       for (const uri of images) {
         if (uri.startsWith('http')) {
@@ -94,7 +106,6 @@ export default function EditReportScreen() {
         }
       }
 
-      // ✅ 3. อัปเดตข้อมูล
       await updateDoc(docRef, {
         dorm: selectedDorm, room: selectedRoom, category: activeCategory,
         detail, title: issueTitle, images: finalImageUrls, updatedAt: new Date().toISOString(),
@@ -129,9 +140,19 @@ export default function EditReportScreen() {
         </View>
 
         <View style={styles.section}><Text style={styles.label}>รูปภาพ</Text>
-          <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
-            <Ionicons name="camera" size={28} color="#F28C28" /><Text style={{color: '#F28C28', fontWeight: '700'}}>เพิ่มรูปภาพ</Text>
-          </TouchableOpacity>
+          {/* 🛠️ แก้ไขส่วนนี้: แยกปุ่มให้ชัดเจน 2 ปุ่ม */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity style={[styles.uploadBox, { flex: 1 }]} onPress={pickImage}>
+              <Ionicons name="image" size={28} color="#F28C28" />
+              <Text style={{color: '#F28C28', fontWeight: '700'}}>เลือกภาพ</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.uploadBox, { flex: 1 }]} onPress={takePhoto}>
+              <Ionicons name="camera" size={28} color="#F28C28" />
+              <Text style={{color: '#F28C28', fontWeight: '700'}}>ถ่ายรูป</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.previewRow}>
             {images.map((uri, index) => (
               <View key={index} style={styles.imageWrapper}>
@@ -159,7 +180,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
   input: { backgroundColor: "#FFF", padding: 15, borderRadius: 12, borderWidth: 1, borderColor: "#D1D5DB" },
   card: { backgroundColor: "#FFF", padding: 15, borderRadius: 16, borderWidth: 1, borderColor: "#E5E7EB" },
-  uploadBox: { borderStyle: "dashed", borderWidth: 2, borderColor: "#F28C28", borderRadius: 16, padding: 20, alignItems: "center" },
+  uploadBox: { borderStyle: "dashed", borderWidth: 2, borderColor: "#F28C28", borderRadius: 16, padding: 20, alignItems: "center", backgroundColor: "#FFF" },
   previewRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 15 },
   imageWrapper: { position: "relative" },
   previewImage: { width: 80, height: 80, borderRadius: 12 },

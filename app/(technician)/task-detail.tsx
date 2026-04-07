@@ -71,6 +71,23 @@ export default function TaskDetailScreen() {
         }
     };
 
+    // ➕ เพิ่มฟังก์ชันถ่ายรูปจากกล้อง
+    const takePhoto = async () => {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+            Alert.alert("แจ้งเตือน", "กรุณาอนุญาตการเข้าถึงกล้อง");
+            return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+        if (!result.canceled && result.assets?.length > 0) {
+            setAfterImages((prev) => [...prev, result.assets[0].uri]);
+        }
+    };
+
     const removeImage = (index: number) => {
         setAfterImages((prev) => prev.filter((_, i) => i !== index));
     };
@@ -259,9 +276,15 @@ export default function TaskDetailScreen() {
                                 <TouchableOpacity style={styles.removeButton} onPress={() => removeImage(index)}><Ionicons name="close" size={16} color="#FFFFFF" /></TouchableOpacity>
                             </View>
                         ))}
+                        
+                        {/* 🛠️ แยก 2 ปุ่มให้ชัดเจน */}
                         <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
+                            <Ionicons name="image" size={28} color="#F28C28" />
+                            <Text style={styles.uploadTitle}>คลังรูป</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.uploadBox} onPress={takePhoto}>
                             <Ionicons name="camera" size={28} color="#F28C28" />
-                            <Text style={styles.uploadTitle}>แนบรูป</Text>
+                            <Text style={styles.uploadTitle}>ถ่ายรูป</Text>
                         </TouchableOpacity>
                     </View>
 

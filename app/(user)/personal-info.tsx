@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from '../../constants/firebaseConfig'; 
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function PersonalInfoScreen() {
   const [isEditing, setIsEditing] = useState(false);
@@ -68,7 +69,30 @@ export default function PersonalInfoScreen() {
     fetchUserData();
   }, []);
 
-  // ✅ แก้ไข: แปลงรูปเป็น Base64 ก่อนเซฟ
+  const uploadImageAsync = async (uri: string) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return null;
+
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const storage = getStorage();
+      // ✅ แก้ไข: เปลี่ยนชื่อโฟลเดอร์เป็น profile_user ตรงเป๊ะตามที่นายต้องการครับ
+      const storageRef = ref(storage, `profile_user/${user.uid}.jpg`);
+      console.log("🚀 Path ปลายทางคือ:", storageRef.fullPath); // เพิ่มบรรทัดนี้เพื่อเช็คในจอคอมนาย
+
+      await uploadBytes(storageRef, blob);
+
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  };
+
   const pickImage = async () => {
     if (!isEditing) return; 
 
@@ -82,14 +106,31 @@ export default function PersonalInfoScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.3, // ลด Quality ลงหน่อยเพื่อให้ String ไม่ยาวเกินไป
-      base64: true, // ✅ สั่งให้อ่านไฟล์ภาพออกมาเป็นข้อความ Base64
+      quality: 0.5, 
     });
 
-    if (!result.canceled && result.assets[0].base64) {
-      // เอาข้อความ Base64 มาต่อหัวให้กลายเป็น URL ที่ใช้แสดงผลได้
-      const imageBase64Uri = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      setProfileImage(imageBase64Uri);
+    if (!result.canceled) {
+      setProfileImage(result.assets[0].uri); 
+    }
+  };
+
+  const takePhoto = async () => {
+    if (!isEditing) return;
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('แจ้งเตือน', 'แอปจำเป็นต้องเข้าถึงกล้องเพื่อถ่ายรูปโปรไฟล์');
+      return;
+    }
+
+    let result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setProfileImage(result.assets[0].uri); 
     }
   };
 
@@ -100,6 +141,15 @@ export default function PersonalInfoScreen() {
       const currentUser = auth.currentUser;
 
       if (currentUser) {
+        let finalImageUrl = profileImage;
+
+        if (profileImage && profileImage.startsWith('file://')) {
+          const uploadedUrl = await uploadImageAsync(profileImage);
+          if (uploadedUrl) {
+            finalImageUrl = uploadedUrl;
+          }
+        }
+
         const docRef = doc(db, "Users", currentUser.uid);
         
         await setDoc(docRef, {
@@ -108,9 +158,10 @@ export default function PersonalInfoScreen() {
           dorm: (dorm || '').trim(),
           room: (room || '').trim(),
           email: currentUser.email,
-          profileImage: profileImage, // ✅ ตอนนี้จะเป็น Base64 String ที่พร้อมโหลดทุกหน้า
+          profileImage: finalImageUrl, 
         }, { merge: true });
         
+        setProfileImage(finalImageUrl); 
         Alert.alert("สำเร็จ", "อัปเดตข้อมูลส่วนตัวเรียบร้อยแล้ว");
         setIsEditing(false);
       }
@@ -158,11 +209,19 @@ export default function PersonalInfoScreen() {
                 </View>
                 {isEditing && (
                   <View style={styles.editAvatarBtn}>
-                    <Ionicons name="camera" size={16} color="#FFFFFF" />
+                    <Ionicons name="image" size={16} color="#FFFFFF" />
                   </View>
                 )}
               </TouchableOpacity>
+              
               {isEditing && <Text style={styles.changePhotoText}>แตะเพื่อเปลี่ยนรูปโปรไฟล์</Text>}
+              
+              {isEditing && (
+                <TouchableOpacity onPress={takePhoto} style={styles.cameraBtn} activeOpacity={0.7}>
+                  <Ionicons name="camera" size={18} color="#10B981" />
+                  <Text style={styles.cameraBtnText}>ถ่ายรูปจากกล้อง</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.formCard}>
@@ -299,6 +358,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', borderWidth: 2, borderColor: '#FFFFFF',
   },
   changePhotoText: { fontSize: 14, fontWeight: '600', color: '#F28C28' },
+  cameraBtn: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: '#ECFDF5',
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#D1FAE5'
+  },
+  cameraBtnText: { fontSize: 14, fontWeight: '600', color: '#10B981', marginLeft: 6 },
   formCard: {
     backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8,

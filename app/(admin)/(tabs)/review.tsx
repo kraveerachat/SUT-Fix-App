@@ -6,14 +6,12 @@ import {
   TouchableOpacity, View, ActivityIndicator, Alert,
 } from 'react-native';
 
-// ✅ เพิ่ม getAuth, addDoc, serverTimestamp
 import { getAuth } from 'firebase/auth';
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../constants/firebaseConfig'; 
 
 const STATUS_TABS = ['ทั้งหมด', 'รอตรวจงาน', 'กำลังซ่อม', 'เสร็จสิ้น'];
 
-// ✅ ฟังก์ชันแปลงวันที่เป็นรูปแบบ "2 เม.ย. 2569"
 const formatThaiDate = (dateString: string) => {
   if (!dateString) return '-';
   const date = new Date(dateString);
@@ -33,7 +31,6 @@ export default function AdminReviewScreen() {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [techInfo, setTechInfo] = useState<any>(null); 
 
-  // ✅ State สำหรับแจ้งเตือนแอดมิน
   const [unreadCount, setUnreadCount] = useState(0);
   const [userData, setUserData] = useState<any>(null);
 
@@ -46,7 +43,9 @@ export default function AdminReviewScreen() {
     let unsubUser = () => {};
     let unsubNotif = () => {};
 
-    const q = query(collection(db, "Reports"), where("status", "in", ["กำลังดำเนินการ", "กำลังซ่อม", "รอตรวจงาน", "เสร็จสมบูรณ์", "เสร็จสิ้น", "Approved"]));
+    // 🛠️ แก้ไข: เพิ่ม "รอตรวจสอบ" และ "ซ่อมแซมเสร็จสิ้น" เข้าไปในการดึงข้อมูลจาก DB
+    const q = query(collection(db, "Reports"), where("status", "in", ["กำลังดำเนินการ", "กำลังซ่อม", "รอตรวจงาน", "รอตรวจสอบ", "เสร็จสมบูรณ์", "เสร็จสิ้น", "ซ่อมแซมเสร็จสิ้น", "Approved"]));
+    
     unsubTasks = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       data.sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
@@ -84,7 +83,6 @@ export default function AdminReviewScreen() {
     }
   };
 
-  // ✅ ฟังก์ชันอนุมัติงาน พร้อมยิง Notification
   const handleApproveWork = async () => {
     if (!selectedTask) return;
     
@@ -100,7 +98,6 @@ export default function AdminReviewScreen() {
               approvedAt: new Date().toISOString()
             });
 
-            // ✅ สร้างแจ้งเตือนกลับไปหา User
             if (selectedTask.userId) {
                 await addDoc(collection(db, "Notifications"), {
                     targetUid: selectedTask.userId,
@@ -134,7 +131,10 @@ export default function AdminReviewScreen() {
 
   const filteredTasks = tasks.filter(task => {
     if (activeTab === 'ทั้งหมด') return true;
-    if (activeTab === 'รอตรวจงาน') return task.status === 'เสร็จสมบูรณ์' || task.status === 'รอตรวจงาน';
+    
+    // 🛠️ แก้ไข: เพิ่ม "รอตรวจสอบ" และ "ซ่อมแซมเสร็จสิ้น" ใน Tab รอตรวจงาน
+    if (activeTab === 'รอตรวจงาน') return task.status === 'เสร็จสมบูรณ์' || task.status === 'รอตรวจงาน' || task.status === 'รอตรวจสอบ' || task.status === 'ซ่อมแซมเสร็จสิ้น';
+    
     if (activeTab === 'กำลังซ่อม') return task.status === 'กำลังดำเนินการ' || task.status === 'กำลังซ่อม';
     if (activeTab === 'เสร็จสิ้น') return task.status === 'เสร็จสิ้น' || task.status === 'Approved';
     return false;
@@ -176,7 +176,9 @@ export default function AdminReviewScreen() {
              <View style={{alignItems: 'center', marginTop: 60}}><Ionicons name="checkmark-done-circle-outline" size={60} color="#D1D5DB" /><Text style={{color: '#9CA3AF', marginTop: 10}}>ไม่มีรายการในหมวดหมู่นี้</Text></View>
            ) : filteredTasks.map((task) => {
             const config = getCategoryConfig(task.category);
-            const isWaiting = task.status === 'เสร็จสมบูรณ์' || task.status === 'รอตรวจงาน';
+            
+            // 🛠️ แก้ไข: อัปเดตเงื่อนไข isWaiting ให้ตรงกับสถานะใหม่
+            const isWaiting = task.status === 'เสร็จสมบูรณ์' || task.status === 'รอตรวจงาน' || task.status === 'รอตรวจสอบ' || task.status === 'ซ่อมแซมเสร็จสิ้น';
 
             return (
               <TouchableOpacity key={task.id} style={styles.ticketCard} onPress={() => handleOpenReview(task)}>
@@ -189,8 +191,7 @@ export default function AdminReviewScreen() {
                   <Text style={styles.locationTitle}>{task.dorm} ・ ห้อง {task.room}</Text>
                   <Text style={styles.issueTitle} numberOfLines={1}>{task.title}</Text>
                   <View style={styles.timeRow}>
-                    {/* ✅ เรียกใช้ formatThaiDate ตรงนี้ */}
-                    <Text style={styles.timeText}>อัปเดตเมื่อ {task.updatedAt || task.closedAt ? formatThaiDate(task.updatedAt || task.closedAt) : '-'}</Text>
+                    <Text style={styles.timeText}>อัปเดตเมื่อ {task.updatedAt || task.closedAt || task.finishedAt ? formatThaiDate(task.updatedAt || task.closedAt || task.finishedAt) : '-'}</Text>
                     <Text style={[styles.statusSuccessText, task.status !== 'เสร็จสิ้น' && {color: '#F59E0B'}]}>{task.status === 'กำลังดำเนินการ' ? 'กำลังซ่อม' : task.status}</Text>
                   </View>
                 </View>
@@ -247,8 +248,10 @@ export default function AdminReviewScreen() {
                             selectedTask.afterImages.map((img: string, i: number) => (
                                 <Image key={i} source={{ uri: img }} style={[styles.compareImage, {marginRight: 8, width: 140, borderColor: '#10B981', borderWidth: 2}]} />
                             ))
+                        ) : selectedTask.finishImage ? (
+                            <Image source={{ uri: selectedTask.finishImage }} style={[styles.compareImage, {borderColor: '#10B981', borderWidth: 2}]} />
                         ) : (
-                            <Image source={{ uri: selectedTask.afterImage || 'https://via.placeholder.com/150' }} style={[styles.compareImage, {borderColor: '#10B981', borderWidth: 2}]} />
+                            <Image source={{ uri: 'https://via.placeholder.com/150' }} style={[styles.compareImage, {borderColor: '#10B981', borderWidth: 2}]} />
                         )}
                     </ScrollView>
                   </View>
@@ -257,7 +260,7 @@ export default function AdminReviewScreen() {
                 <View style={styles.sectionBlock}>
                   <Text style={styles.sectionBlockTitle}>สรุปงานจากช่าง</Text>
                   <View style={styles.noteBox}>
-                    <Text style={styles.noteText}>รายละเอียด: <Text style={{fontWeight: '500'}}>{selectedTask.closingDetail || selectedTask.action || 'ไม่มีการบันทึกรายละเอียด'}</Text></Text>
+                    <Text style={styles.noteText}>รายละเอียด: <Text style={{fontWeight: '500'}}>{selectedTask.closingDetail || selectedTask.finishDetail || selectedTask.action || 'ไม่มีการบันทึกรายละเอียด'}</Text></Text>
                     <View style={styles.dividerLine} />
                     <View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
                         <Text style={[styles.noteText, {color: '#6B7280'}]}>ค่าวัสดุอุปกรณ์:</Text>
@@ -266,7 +269,8 @@ export default function AdminReviewScreen() {
                   </View>
                 </View>
 
-                {(selectedTask.status === 'เสร็จสมบูรณ์' || selectedTask.status === 'รอตรวจงาน') && (
+                {/* 🛠️ แก้ไข: อัปเดตเงื่อนไขปุ่มอนุมัติ */}
+                {(selectedTask.status === 'เสร็จสมบูรณ์' || selectedTask.status === 'รอตรวจงาน' || selectedTask.status === 'รอตรวจสอบ' || selectedTask.status === 'ซ่อมแซมเสร็จสิ้น') && (
                   <TouchableOpacity style={styles.approveBtn} onPress={handleApproveWork}>
                     <Ionicons name="checkmark-done" size={20} color="#059669" style={{marginRight: 8}}/>
                     <Text style={styles.approveBtnText}>อนุมัติและปิดงาน</Text>

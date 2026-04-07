@@ -4,8 +4,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import {
-  Alert, FlatList, Image, Modal, Platform, SafeAreaView,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator,
+    Alert, FlatList, Image, Modal, Platform, SafeAreaView,
+    ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator,
 } from 'react-native';
 
 import { getAuth } from "firebase/auth";
@@ -50,6 +50,22 @@ export default function ReportScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.5, 
+    });
+    if (!result.canceled && result.assets?.length > 0) {
+      setImages((prev) => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  // ➕ เพิ่มฟังก์ชันถ่ายรูปจากกล้อง (Camera)
+  const takePhoto = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('แจ้งเตือน', 'กรุณาอนุญาตการเข้าถึงกล้อง');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.5,
     });
     if (!result.canceled && result.assets?.length > 0) {
       setImages((prev) => [...prev, result.assets[0].uri]);
@@ -171,10 +187,18 @@ export default function ReportScreen() {
 
         <View style={styles.section}>
           <Text style={styles.label}>ภาพประกอบ (ถ้ามี)</Text>
-          <TouchableOpacity style={styles.uploadBox} onPress={pickImage}>
-            <Ionicons name="camera" size={32} color="#F28C28" />
-            <Text style={styles.uploadText}>คลิกเพื่อเพิ่มรูปภาพ</Text>
-          </TouchableOpacity>
+          {/* 🛠️ แก้ไขส่วนนี้: แยกปุ่มให้ชัดเจน 2 ปุ่มเหมือนหน้า Edit */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity style={[styles.uploadBox, { flex: 1 }]} onPress={pickImage}>
+              <Ionicons name="image" size={32} color="#F28C28" />
+              <Text style={styles.uploadText}>คลังรูปภาพ</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.uploadBox, { flex: 1 }]} onPress={takePhoto}>
+              <Ionicons name="camera" size={32} color="#F28C28" />
+              <Text style={styles.uploadText}>ถ่ายรูป</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.previewRow}>
             {images.map((uri, index) => (
